@@ -284,6 +284,9 @@ struct ContentView: View {
     if hasInputAccess {
       permissionMessage = nil
       refresh()
+    } else {
+      permissionMessage =
+        "Access is still off. Enable Model O Eternal Configuration in Input Monitoring. If it is not listed, select + and add it from Applications."
     }
   }
 
