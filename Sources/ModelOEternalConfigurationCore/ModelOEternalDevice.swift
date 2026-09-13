@@ -333,6 +333,9 @@ public struct ModelOEternalDevice {
     }
 
     let deviceResult = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
+    if deviceResult == kIOReturnNotPermitted {
+      throw ModelOEternalDeviceError.inputMonitoringRequired
+    }
     guard deviceResult == kIOReturnSuccess else {
       throw ModelOEternalDeviceError.cannotOpenDevice(deviceResult)
     }

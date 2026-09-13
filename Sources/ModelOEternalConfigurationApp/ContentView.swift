@@ -38,7 +38,7 @@ struct ContentView: View {
   @State private var isConnected = false
   @State private var isWorking = false
   @State private var message = "Connect your Model O Eternal."
-  @State private var hasInputAccess = CGPreflightListenEventAccess()
+  @State private var hasInputAccess = false
   @State private var permissionMessage: String?
   private let mouse = ModelOEternalDevice()
 
@@ -53,7 +53,7 @@ struct ContentView: View {
       if hasInputAccess { detail } else { accessRequest }
     }
     .frame(minWidth: 760, minHeight: 540)
-    .onAppear { if hasInputAccess { refresh() } }
+    .onAppear(perform: refresh)
   }
 
   private var detail: some View {
@@ -261,9 +261,17 @@ struct ContentView: View {
       buttons = state.buttons
       advanced = state.advanced
       firmware = state.firmwareVersion
+      hasInputAccess = true
+      permissionMessage = nil
       isConnected = true
       message = "Model O Eternal connected."
+    } catch ModelOEternalDeviceError.inputMonitoringRequired {
+      hasInputAccess = false
+      isConnected = false
+      permissionMessage =
+        "Access is still off. Enable Model O Eternal Configuration in Input Monitoring."
     } catch {
+      hasInputAccess = true
       isConnected = false
       message = error.localizedDescription
     }
@@ -271,7 +279,7 @@ struct ContentView: View {
 
   private func requestAccess() {
     _ = CGRequestListenEventAccess()
-    checkAccess()
+    refresh()
     guard !hasInputAccess else { return }
     permissionMessage =
       "Enable Model O Eternal Configuration in the list. Then return here and select Check access."
@@ -283,14 +291,7 @@ struct ContentView: View {
   }
 
   private func checkAccess() {
-    hasInputAccess = CGPreflightListenEventAccess()
-    if hasInputAccess {
-      permissionMessage = nil
-      refresh()
-    } else {
-      permissionMessage =
-        "Access is still off. Enable Model O Eternal Configuration in Input Monitoring. If it is not listed, select + and add it from Applications."
-    }
+    refresh()
   }
 
   private func apply() {
