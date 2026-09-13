@@ -137,11 +137,53 @@ struct ModelOEternalConfigurationTests {
     #expect(original.verifies(expected, in: readBack))
   }
 
+  @Test
+  func readsAndWritesSensitivityAndLiftOffDistance() throws {
+    let bytes = validReport()
+    let report = try ModelOEternalConfiguration(bytes: bytes, configurationLength: 131)
+    #expect(report.sensitivitySettings.stages.map(\.dpi) == [400, 800, 1600, 3200, 50, 50, 50, 50])
+    #expect(report.sensitivitySettings.activeStage == 3)
+    #expect(report.sensitivitySettings.pollingRate == .hz1000)
+    #expect(report.liftOffDistance == .threeMillimeters)
+
+    var settings = report.sensitivitySettings
+    settings.stages[2].dpi = 1650
+    settings.stages[4].isEnabled = true
+    settings.activeStage = 5
+    settings.pollingRate = .hz500
+    let changed = try report.applying(settings)
+    let readBack = try ModelOEternalConfiguration(bytes: changed, configurationLength: 131)
+    #expect(readBack.sensitivitySettings == settings)
+    #expect(
+      report.verifies(
+        .twoMillimeters,
+        in: try .init(bytes: report.applying(.twoMillimeters), configurationLength: 131)))
+  }
+
+  @Test
+  func rejectsInvalidSensitivity() throws {
+    let report = try ModelOEternalConfiguration(bytes: validReport(), configurationLength: 131)
+    var settings = report.sensitivitySettings
+    settings.stages[0].dpi = 425
+    #expect(throws: ConfigurationError.invalidDPI(stage: 1, dpi: 425)) {
+      try report.applying(settings)
+    }
+    settings = report.sensitivitySettings
+    settings.activeStage = 9
+    #expect(throws: ConfigurationError.invalidActiveDPIStage(9)) {
+      try report.applying(settings)
+    }
+  }
+
   private func validReport() -> [UInt8] {
     var bytes = [UInt8](repeating: 0, count: ModelOEternalConfiguration.reportSize)
     bytes[0] = 4
     bytes[1] = 0x11
     bytes[9] = 0x18
+    bytes[10] = 4
+    bytes[11] = 0x34
+    bytes[12] = 0xf0
+    bytes[13...16] = [7, 15, 31, 63]
     bytes[53] = LightingEffect.glorious.rawValue
     bytes[54] = 0x42
     bytes[56] = 0x40
@@ -151,6 +193,7 @@ struct ModelOEternalConfigurationTests {
     bytes[116] = 0x42
     bytes[124] = 0x42
     bytes[125] = 0x42
+    bytes[129] = 2
     return bytes
   }
 }

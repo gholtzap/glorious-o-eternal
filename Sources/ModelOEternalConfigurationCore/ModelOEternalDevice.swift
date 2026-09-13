@@ -10,7 +10,8 @@ public enum ModelOEternalDeviceError: LocalizedError {
   case readFailed(IOReturn)
   case writeFailed(IOReturn)
   case invalidReadLength(Int)
-  case verificationFailed
+  case invalidFirmwareVersion
+  case verificationFailed(String)
 
   public var errorDescription: String? {
     switch self {
@@ -30,14 +31,24 @@ public enum ModelOEternalDeviceError: LocalizedError {
       "The mouse configuration could not be written (\(Self.hex(code)))."
     case .invalidReadLength(let length):
       "The mouse returned \(length) configuration bytes."
-    case .verificationFailed:
-      "The mouse did not save the requested lighting settings."
+    case .invalidFirmwareVersion:
+      "The mouse returned an invalid firmware version."
+    case .verificationFailed(let setting):
+      "The mouse did not save the requested \(setting) settings."
     }
   }
 
   private static func hex(_ code: IOReturn) -> String {
     String(format: "0x%08x", code)
   }
+}
+
+public struct ModelOEternalState: Equatable, Sendable {
+  public var lighting: LightingSettings
+  public var sensitivity: SensitivitySettings
+  public var buttons: ButtonSettings
+  public var advanced: AdvancedSettings
+  public var firmwareVersion: String
 }
 
 public struct ModelOEternalDevice {
@@ -50,6 +61,50 @@ public struct ModelOEternalDevice {
     try readConfigurationSnapshot().settings
   }
 
+  public func readState() throws -> ModelOEternalState {
+    try withControlDevice { device in
+      let configuration = try readConfiguration(from: device)
+      let buttonRaw = try readRawSnapshot(
+        command: 0x12, expectedLength: ModelOEternalButtonConfiguration.configurationLength,
+        from: device)
+      let buttons = try ModelOEternalButtonConfiguration(
+        bytes: buttonRaw.bytes, configurationLength: buttonRaw.length)
+      return ModelOEternalState(
+        lighting: configuration.settings,
+        sensitivity: configuration.sensitivitySettings,
+        buttons: buttons.settings,
+        advanced: AdvancedSettings(
+          debounceMilliseconds: try readDebounce(from: device),
+          liftOffDistance: configuration.liftOffDistance),
+        firmwareVersion: try readFirmwareVersion(from: device)
+      )
+    }
+  }
+
+  public func readSensitivity() throws -> SensitivitySettings {
+    try readConfigurationSnapshot().sensitivitySettings
+  }
+
+  public func readButtons() throws -> ButtonSettings {
+    let raw = try readRawButtonSnapshot()
+    return try ModelOEternalButtonConfiguration(
+      bytes: raw.bytes, configurationLength: raw.length
+    ).settings
+  }
+
+  public func readAdvanced() throws -> AdvancedSettings {
+    try withControlDevice { device in
+      let configuration = try readConfiguration(from: device)
+      return AdvancedSettings(
+        debounceMilliseconds: try readDebounce(from: device),
+        liftOffDistance: configuration.liftOffDistance)
+    }
+  }
+
+  public func readFirmwareVersion() throws -> String {
+    try withControlDevice { try readFirmwareVersion(from: $0) }
+  }
+
   func readConfigurationSnapshot() throws -> ModelOEternalConfiguration {
     try withControlDevice { device in
       try readConfiguration(from: device)
@@ -58,35 +113,79 @@ public struct ModelOEternalDevice {
 
   func readRawConfigurationSnapshot() throws -> (bytes: [UInt8], length: Int) {
     try withControlDevice { device in
-      try readRawConfiguration(from: device)
+      try readRawSnapshot(
+        command: 0x11, expectedLength: ModelOEternalConfiguration.configurationLength, from: device)
+    }
+  }
+
+  func readRawButtonSnapshot() throws -> (bytes: [UInt8], length: Int) {
+    try withControlDevice { device in
+      try readRawSnapshot(command: 0x12, expectedLength: 88, from: device)
+    }
+  }
+
+  func readRawCommand(_ command: UInt8) throws -> [UInt8] {
+    try withControlDevice { device in
+      try query(command: command, from: device)
     }
   }
 
   public func apply(_ settings: LightingSettings) throws {
     try withControlDevice { device in
       let current = try readConfiguration(from: device)
-      let report = try current.applying(settings)
-      let result = report.withUnsafeBytes { buffer in
-        IOHIDDeviceSetReport(
-          device,
-          kIOHIDReportTypeFeature,
-          4,
-          buffer.bindMemory(to: UInt8.self).baseAddress!,
-          report.count
-        )
-      }
-      guard result == kIOReturnSuccess else {
-        throw ModelOEternalDeviceError.writeFailed(result)
-      }
+      try writeAndVerify(
+        try current.applying(settings), reportID: 4, setting: "lighting", to: device
+      ) { current.verifies(settings, in: try readConfiguration(from: device)) }
+    }
+  }
 
-      for _ in 0..<5 {
-        Thread.sleep(forTimeInterval: 0.1)
-        let readBack = try readConfiguration(from: device)
-        if current.verifies(settings, in: readBack) {
-          return
-        }
+  public func apply(_ settings: SensitivitySettings) throws {
+    try withControlDevice { device in
+      let current = try readConfiguration(from: device)
+      try writeAndVerify(
+        try current.applying(settings), reportID: 4, setting: "sensitivity", to: device
+      ) { current.verifies(settings, in: try readConfiguration(from: device)) }
+    }
+  }
+
+  public func apply(_ settings: ButtonSettings) throws {
+    try withControlDevice { device in
+      let raw = try readRawSnapshot(
+        command: 0x12, expectedLength: ModelOEternalButtonConfiguration.configurationLength,
+        from: device)
+      let current = try ModelOEternalButtonConfiguration(
+        bytes: raw.bytes, configurationLength: raw.length)
+      try writeAndVerify(
+        try current.applying(settings), reportID: 4, setting: "button", to: device
+      ) {
+        let readBack = try readRawSnapshot(
+          command: 0x12, expectedLength: ModelOEternalButtonConfiguration.configurationLength,
+          from: device)
+        return try ModelOEternalButtonConfiguration(
+          bytes: readBack.bytes, configurationLength: readBack.length
+        ).settings == settings
       }
-      throw ModelOEternalDeviceError.verificationFailed
+    }
+  }
+
+  public func apply(_ liftOffDistance: LiftOffDistance) throws {
+    try withControlDevice { device in
+      let current = try readConfiguration(from: device)
+      try writeAndVerify(
+        current.applying(liftOffDistance), reportID: 4, setting: "lift-off distance", to: device
+      ) { current.verifies(liftOffDistance, in: try readConfiguration(from: device)) }
+    }
+  }
+
+  public func applyDebounce(milliseconds: Int) throws {
+    guard stride(from: 4, through: 16, by: 2).contains(milliseconds) else {
+      throw ConfigurationError.invalidDebounce(milliseconds)
+    }
+    try withControlDevice { device in
+      let report: [UInt8] = [5, 0x1a, UInt8(milliseconds / 2), 0, 0, 0]
+      try writeAndVerify(report, reportID: 5, setting: "debounce", to: device) {
+        try readDebounce(from: device) == milliseconds
+      }
     }
   }
 
@@ -102,14 +201,21 @@ public struct ModelOEternalDevice {
   private func readRawConfiguration(from device: IOHIDDevice) throws -> (
     bytes: [UInt8], length: Int
   ) {
-    let command: [UInt8] = [5, 0x11, 0, 0, 0, 0]
-    let commandResult = command.withUnsafeBytes { buffer in
+    try readRawSnapshot(
+      command: 0x11, expectedLength: ModelOEternalConfiguration.configurationLength, from: device)
+  }
+
+  private func readRawSnapshot(command: UInt8, expectedLength: Int, from device: IOHIDDevice) throws
+    -> (bytes: [UInt8], length: Int)
+  {
+    let request: [UInt8] = [5, command, 0, 0, 0, 0]
+    let commandResult = request.withUnsafeBytes { buffer in
       IOHIDDeviceSetReport(
         device,
         kIOHIDReportTypeFeature,
         5,
         buffer.bindMemory(to: UInt8.self).baseAddress!,
-        command.count
+        request.count
       )
     }
     guard commandResult == kIOReturnSuccess else {
@@ -131,11 +237,74 @@ public struct ModelOEternalDevice {
     guard readResult == kIOReturnSuccess else {
       throw ModelOEternalDeviceError.readFailed(readResult)
     }
-    guard reportLength == ModelOEternalConfiguration.configurationLength else {
+    guard reportLength == expectedLength else {
       throw ModelOEternalDeviceError.invalidReadLength(reportLength)
     }
 
     return (report, reportLength)
+  }
+
+  private func query(command: UInt8, from device: IOHIDDevice) throws -> [UInt8] {
+    var report: [UInt8] = [5, command, 0, 0, 0, 0]
+    let commandResult = report.withUnsafeBytes { buffer in
+      IOHIDDeviceSetReport(
+        device,
+        kIOHIDReportTypeFeature,
+        5,
+        buffer.bindMemory(to: UInt8.self).baseAddress!,
+        report.count
+      )
+    }
+    guard commandResult == kIOReturnSuccess else {
+      throw ModelOEternalDeviceError.commandFailed(commandResult)
+    }
+
+    var reportLength = report.count
+    let readResult = report.withUnsafeMutableBytes { buffer in
+      IOHIDDeviceGetReport(
+        device,
+        kIOHIDReportTypeFeature,
+        5,
+        buffer.bindMemory(to: UInt8.self).baseAddress!,
+        &reportLength
+      )
+    }
+    guard readResult == kIOReturnSuccess else {
+      throw ModelOEternalDeviceError.readFailed(readResult)
+    }
+    guard reportLength == report.count, report[0] == 5, report[1] == command else {
+      throw ModelOEternalDeviceError.invalidReadLength(reportLength)
+    }
+    return report
+  }
+
+  private func readFirmwareVersion(from device: IOHIDDevice) throws -> String {
+    let report = try query(command: 0x01, from: device)
+    guard let version = String(bytes: report[2...5], encoding: .ascii),
+      version.allSatisfy(\.isNumber)
+    else { throw ModelOEternalDeviceError.invalidFirmwareVersion }
+    return version
+  }
+
+  private func readDebounce(from device: IOHIDDevice) throws -> Int {
+    Int(try query(command: 0x1a, from: device)[2]) * 2
+  }
+
+  private func writeAndVerify(
+    _ report: [UInt8], reportID: CFIndex, setting: String, to device: IOHIDDevice,
+    verify: () throws -> Bool
+  ) throws {
+    let result = report.withUnsafeBytes { buffer in
+      IOHIDDeviceSetReport(
+        device, kIOHIDReportTypeFeature, reportID,
+        buffer.bindMemory(to: UInt8.self).baseAddress!, report.count)
+    }
+    guard result == kIOReturnSuccess else { throw ModelOEternalDeviceError.writeFailed(result) }
+    for _ in 0..<5 {
+      Thread.sleep(forTimeInterval: 0.1)
+      if try verify() { return }
+    }
+    throw ModelOEternalDeviceError.verificationFailed(setting)
   }
 
   private func withControlDevice<T>(_ operation: (IOHIDDevice) throws -> T) throws -> T {

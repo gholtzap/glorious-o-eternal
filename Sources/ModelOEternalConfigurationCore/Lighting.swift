@@ -98,6 +98,81 @@ public struct LightingSettings: Equatable, Sendable {
   }
 }
 
+public enum PollingRate: UInt8, CaseIterable, Identifiable, Sendable {
+  case hz125 = 1
+  case hz250 = 2
+  case hz500 = 3
+  case hz1000 = 4
+
+  public var id: UInt8 { rawValue }
+
+  public var hertz: Int {
+    switch self {
+    case .hz125: 125
+    case .hz250: 250
+    case .hz500: 500
+    case .hz1000: 1000
+    }
+  }
+
+  public init?(hertz: Int) {
+    guard let rate = Self.allCases.first(where: { $0.hertz == hertz }) else { return nil }
+    self = rate
+  }
+}
+
+public struct DPIStage: Equatable, Identifiable, Sendable {
+  public let id: Int
+  public var dpi: Int
+  public var color: RGBColor
+  public var isEnabled: Bool
+
+  public init(id: Int, dpi: Int, color: RGBColor, isEnabled: Bool) {
+    self.id = id
+    self.dpi = dpi
+    self.color = color
+    self.isEnabled = isEnabled
+  }
+}
+
+public struct SensitivitySettings: Equatable, Sendable {
+  public var stages: [DPIStage]
+  public var activeStage: Int
+  public var pollingRate: PollingRate
+
+  public init(stages: [DPIStage], activeStage: Int, pollingRate: PollingRate) {
+    self.stages = stages
+    self.activeStage = activeStage
+    self.pollingRate = pollingRate
+  }
+}
+
+public enum LiftOffDistance: UInt8, CaseIterable, Identifiable, Sendable {
+  case twoMillimeters = 1
+  case threeMillimeters = 2
+
+  public var id: UInt8 { rawValue }
+  public var millimeters: Int { self == .twoMillimeters ? 2 : 3 }
+
+  public init?(millimeters: Int) {
+    switch millimeters {
+    case 2: self = .twoMillimeters
+    case 3: self = .threeMillimeters
+    default: return nil
+    }
+  }
+}
+
+public struct AdvancedSettings: Equatable, Sendable {
+  public var debounceMilliseconds: Int
+  public var liftOffDistance: LiftOffDistance
+
+  public init(debounceMilliseconds: Int, liftOffDistance: LiftOffDistance) {
+    self.debounceMilliseconds = debounceMilliseconds
+    self.liftOffDistance = liftOffDistance
+  }
+}
+
 public enum ConfigurationError: LocalizedError, Equatable {
   case invalidReportSize(Int)
   case invalidLength(Int)
@@ -106,6 +181,14 @@ public enum ConfigurationError: LocalizedError, Equatable {
   case unsupportedEffect(UInt8)
   case invalidBrightness(UInt8)
   case invalidSpeed(UInt8)
+  case unsupportedPollingRate(UInt8)
+  case unsupportedIndependentDPI
+  case invalidDPIStageCount(Int)
+  case invalidDPI(stage: Int, dpi: Int)
+  case invalidDPIConfiguration
+  case invalidActiveDPIStage(Int)
+  case invalidLiftOffDistance(UInt8)
+  case invalidDebounce(Int)
 
   public var errorDescription: String? {
     switch self {
@@ -123,6 +206,22 @@ public enum ConfigurationError: LocalizedError, Equatable {
       "Brightness \(brightness) is outside the supported range 1 through 4."
     case .invalidSpeed(let speed):
       "Speed \(speed) is outside the supported range 1 through 3."
+    case .unsupportedPollingRate(let rate):
+      "The mouse uses unsupported polling-rate code \(rate)."
+    case .unsupportedIndependentDPI:
+      "Separate horizontal and vertical DPI values are not supported."
+    case .invalidDPIStageCount(let count):
+      "The mouse returned \(count) DPI stages instead of 8."
+    case .invalidDPI(let stage, let dpi):
+      "DPI stage \(stage) has invalid value \(dpi). Use 50 through 12000 in steps of 50."
+    case .invalidDPIConfiguration:
+      "At least one DPI stage must be enabled."
+    case .invalidActiveDPIStage(let stage):
+      "Active DPI stage \(stage) is not enabled."
+    case .invalidLiftOffDistance(let value):
+      "The mouse uses unsupported lift-off-distance code \(value)."
+    case .invalidDebounce(let milliseconds):
+      "Debounce \(milliseconds) ms is invalid. Use 4 through 16 in steps of 2."
     }
   }
 }
@@ -136,6 +235,11 @@ public struct ModelOEternalConfiguration: Equatable, Sendable {
     static let command = 1
     static let writeLength = 3
     static let sensor = 9
+    static let pollingRate = 10
+    static let dpiState = 11
+    static let disabledDPIStages = 12
+    static let dpi = 13
+    static let dpiColor = 29
     static let effect = 53
     static let gloriousMode = 54
     static let singleMode = 56
@@ -147,10 +251,13 @@ public struct ModelOEternalConfiguration: Equatable, Sendable {
     static let waveMode = 124
     static let breathingSingleMode = 125
     static let breathingSingleColor = 126
+    static let liftOffDistance = 129
   }
 
   private let bytes: [UInt8]
   private let effect: LightingEffect
+  private let pollingRate: PollingRate
+  private let liftOffDistanceValue: LiftOffDistance
 
   public init(bytes: [UInt8], configurationLength: Int) throws {
     guard bytes.count == Self.reportSize else {
@@ -168,6 +275,15 @@ public struct ModelOEternalConfiguration: Equatable, Sendable {
     guard bytes[Offset.sensor] == 0x18 else {
       throw ConfigurationError.unsupportedSensor(bytes[Offset.sensor])
     }
+    guard let pollingRate = PollingRate(rawValue: bytes[Offset.pollingRate] & 0x0f) else {
+      throw ConfigurationError.unsupportedPollingRate(bytes[Offset.pollingRate] & 0x0f)
+    }
+    guard bytes[Offset.pollingRate] & 0x80 == 0 else {
+      throw ConfigurationError.unsupportedIndependentDPI
+    }
+    guard let liftOffDistance = LiftOffDistance(rawValue: bytes[Offset.liftOffDistance]) else {
+      throw ConfigurationError.invalidLiftOffDistance(bytes[Offset.liftOffDistance])
+    }
     guard let effect = LightingEffect(rawValue: bytes[Offset.effect]) else {
       throw ConfigurationError.unsupportedEffect(bytes[Offset.effect])
     }
@@ -179,8 +295,20 @@ public struct ModelOEternalConfiguration: Equatable, Sendable {
       throw ConfigurationError.invalidSpeed(mode & 0x0f)
     }
 
+    let enabledCount = (0..<8).count { bytes[Offset.disabledDPIStages] & (1 << $0) == 0 }
+    let reportedCount = Int(bytes[Offset.dpiState] & 0x0f)
+    let activeOrdinal = Int(bytes[Offset.dpiState] >> 4)
+    guard enabledCount > 0, enabledCount == reportedCount else {
+      throw ConfigurationError.invalidDPIConfiguration
+    }
+    guard (1...enabledCount).contains(activeOrdinal) else {
+      throw ConfigurationError.invalidActiveDPIStage(activeOrdinal)
+    }
+
     self.bytes = bytes
     self.effect = effect
+    self.pollingRate = pollingRate
+    self.liftOffDistanceValue = liftOffDistance
   }
 
   public var settings: LightingSettings {
@@ -198,6 +326,35 @@ public struct ModelOEternalConfiguration: Equatable, Sendable {
     )
   }
 
+  public var sensitivitySettings: SensitivitySettings {
+    let disabled = bytes[Offset.disabledDPIStages]
+    let activeOrdinal = Int(bytes[Offset.dpiState] >> 4)
+    var enabledOrdinal = 0
+    var activeStage = 1
+    let stages = (0..<8).map { index in
+      let isEnabled = disabled & (1 << index) == 0
+      if isEnabled {
+        enabledOrdinal += 1
+        if enabledOrdinal == activeOrdinal { activeStage = index + 1 }
+      }
+      return DPIStage(
+        id: index + 1,
+        dpi: (Int(bytes[Offset.dpi + index]) + 1) * 50,
+        color: readRBGColor(at: Offset.dpiColor + index * 3),
+        isEnabled: isEnabled
+      )
+    }
+    return SensitivitySettings(
+      stages: stages,
+      activeStage: activeStage,
+      pollingRate: pollingRate
+    )
+  }
+
+  public var liftOffDistance: LiftOffDistance {
+    liftOffDistanceValue
+  }
+
   public func applying(_ settings: LightingSettings) throws -> [UInt8] {
     guard (1...4).contains(settings.brightness) else {
       throw ConfigurationError.invalidBrightness(settings.brightness)
@@ -207,9 +364,7 @@ public struct ModelOEternalConfiguration: Equatable, Sendable {
     }
 
     var result = bytes
-    result[Offset.reportID] = 4
-    result[Offset.command] = 0x11
-    result[Offset.writeLength] = UInt8(Self.configurationLength - 8)
+    prepareWrite(&result)
     result[Offset.effect] = settings.effect.rawValue
 
     if settings.effect != .off {
@@ -230,10 +385,79 @@ public struct ModelOEternalConfiguration: Equatable, Sendable {
     return result
   }
 
+  public func applying(_ settings: SensitivitySettings) throws -> [UInt8] {
+    try Self.validate(settings)
+    var result = bytes
+    prepareWrite(&result)
+    result[Offset.pollingRate] =
+      (result[Offset.pollingRate] & 0xf0) | settings.pollingRate.rawValue
+
+    let enabled = settings.stages.filter(\.isEnabled)
+    guard let activeIndex = enabled.firstIndex(where: { $0.id == settings.activeStage }) else {
+      throw ConfigurationError.invalidActiveDPIStage(settings.activeStage)
+    }
+    let activeOrdinal = activeIndex + 1
+    result[Offset.dpiState] = UInt8((activeOrdinal << 4) | enabled.count)
+    result[Offset.disabledDPIStages] = settings.stages.reduce(0) { mask, stage in
+      stage.isEnabled ? mask : mask | UInt8(1 << (stage.id - 1))
+    }
+
+    for stage in settings.stages {
+      result[Offset.dpi + stage.id - 1] = UInt8(stage.dpi / 50 - 1)
+      writeRBGColor(stage.color, to: &result, at: Offset.dpiColor + (stage.id - 1) * 3)
+    }
+    return result
+  }
+
+  public func applying(_ liftOffDistance: LiftOffDistance) -> [UInt8] {
+    var result = bytes
+    prepareWrite(&result)
+    result[Offset.liftOffDistance] = liftOffDistance.rawValue
+    return result
+  }
+
   public func verifies(_ expected: LightingSettings, in readBack: ModelOEternalConfiguration)
     -> Bool
   {
     readBack.settings.hasSameEffectiveValues(as: expected)
+  }
+
+  public func verifies(
+    _ expected: SensitivitySettings, in readBack: ModelOEternalConfiguration
+  ) -> Bool {
+    readBack.sensitivitySettings == expected
+  }
+
+  public func verifies(
+    _ expected: LiftOffDistance, in readBack: ModelOEternalConfiguration
+  ) -> Bool {
+    readBack.liftOffDistance == expected
+  }
+
+  public static func validate(_ settings: SensitivitySettings) throws {
+    guard settings.stages.count == 8,
+      settings.stages.map(\.id) == Array(1...8)
+    else {
+      throw ConfigurationError.invalidDPIStageCount(settings.stages.count)
+    }
+    for stage in settings.stages
+    where !(50...12_000).contains(stage.dpi) || stage.dpi % 50 != 0 {
+      throw ConfigurationError.invalidDPI(stage: stage.id, dpi: stage.dpi)
+    }
+    guard settings.stages.contains(where: \.isEnabled) else {
+      throw ConfigurationError.invalidDPIConfiguration
+    }
+    guard (1...8).contains(settings.activeStage),
+      settings.stages[settings.activeStage - 1].isEnabled
+    else {
+      throw ConfigurationError.invalidActiveDPIStage(settings.activeStage)
+    }
+  }
+
+  private func prepareWrite(_ result: inout [UInt8]) {
+    result[Offset.reportID] = 4
+    result[Offset.command] = 0x11
+    result[Offset.writeLength] = UInt8(Self.configurationLength - 8)
   }
 
   private static func modeOffset(for effect: LightingEffect) -> Int {
