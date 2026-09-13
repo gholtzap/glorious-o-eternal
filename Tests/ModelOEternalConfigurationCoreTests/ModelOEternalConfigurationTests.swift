@@ -134,7 +134,7 @@ struct ModelOEternalConfigurationTests {
     let changed = try original.applying(expected)
     let readBack = try ModelOEternalConfiguration(bytes: changed, configurationLength: 131)
 
-    #expect(original.verifies(expected, in: readBack))
+    #expect(readBack.settings.hasSameEffectiveValues(as: expected))
   }
 
   @Test

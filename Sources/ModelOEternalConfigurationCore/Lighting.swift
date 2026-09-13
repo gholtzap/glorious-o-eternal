@@ -416,12 +416,6 @@ public struct ModelOEternalConfiguration: Equatable, Sendable {
     return result
   }
 
-  public func verifies(_ expected: LightingSettings, in readBack: ModelOEternalConfiguration)
-    -> Bool
-  {
-    readBack.settings.hasSameEffectiveValues(as: expected)
-  }
-
   public func verifies(
     _ expected: SensitivitySettings, in readBack: ModelOEternalConfiguration
   ) -> Bool {

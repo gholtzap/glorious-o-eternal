@@ -135,7 +135,7 @@ public struct ModelOEternalDevice {
       let current = try readConfiguration(from: device)
       try writeAndVerify(
         try current.applying(settings), reportID: 4, setting: "lighting", to: device
-      ) { current.verifies(settings, in: try readConfiguration(from: device)) }
+      ) { try readConfiguration(from: device).settings.hasSameEffectiveValues(as: settings) }
     }
   }
 
