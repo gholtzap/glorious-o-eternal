@@ -201,13 +201,16 @@ struct ContentView: View {
         "The mouse puts its configuration controls on a keyboard-class USB interface. macOS requires this permission."
       )
       Text("The app does not record or process keystrokes.").foregroundStyle(.secondary)
-      if let permissionMessage {
-        Text(permissionMessage).foregroundStyle(.secondary)
-      }
       HStack {
         Button("Check access", action: checkAccess)
         Button("Open Input Monitoring", action: requestAccess).buttonStyle(.borderedProminent)
       }
+      ZStack(alignment: .topLeading) {
+        if let permissionMessage {
+          Text(permissionMessage).foregroundStyle(.blue)
+        }
+      }
+      .frame(height: 42, alignment: .topLeading)
     }.padding(32).frame(maxWidth: 520, alignment: .leading)
   }
 
