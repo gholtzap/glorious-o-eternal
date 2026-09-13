@@ -212,7 +212,7 @@ enum Arguments {
 
 @main
 enum ModelOEternalConfigurationCommand {
-  static let version = "0.2.0"
+  static let version = "0.2.1"
 
   static func main() {
     do { try run(Arguments.parse(Array(CommandLine.arguments.dropFirst()))) } catch {

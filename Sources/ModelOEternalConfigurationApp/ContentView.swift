@@ -39,6 +39,7 @@ struct ContentView: View {
   @State private var isWorking = false
   @State private var message = "Connect your Model O Eternal."
   @State private var hasInputAccess = CGPreflightListenEventAccess()
+  @State private var permissionMessage: String?
   private let mouse = ModelOEternalDevice()
 
   var body: some View {
@@ -200,11 +201,13 @@ struct ContentView: View {
         "The mouse puts its configuration controls on a keyboard-class USB interface. macOS requires this permission."
       )
       Text("The app does not record or process keystrokes.").foregroundStyle(.secondary)
-      Button("Continue") {
-        _ = CGRequestListenEventAccess()
-        hasInputAccess = CGPreflightListenEventAccess()
-        if hasInputAccess { refresh() }
-      }.buttonStyle(.borderedProminent)
+      if let permissionMessage {
+        Text(permissionMessage).foregroundStyle(.secondary)
+      }
+      HStack {
+        Button("Check access", action: checkAccess)
+        Button("Open Input Monitoring", action: requestAccess).buttonStyle(.borderedProminent)
+      }
     }.padding(32).frame(maxWidth: 520, alignment: .leading)
   }
 
@@ -260,6 +263,27 @@ struct ContentView: View {
     } catch {
       isConnected = false
       message = error.localizedDescription
+    }
+  }
+
+  private func requestAccess() {
+    _ = CGRequestListenEventAccess()
+    checkAccess()
+    guard !hasInputAccess else { return }
+    permissionMessage =
+      "Enable Model O Eternal Configuration in the list. Then return here and select Check access."
+    guard
+      let url = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+    else { return }
+    NSWorkspace.shared.open(url)
+  }
+
+  private func checkAccess() {
+    hasInputAccess = CGPreflightListenEventAccess()
+    if hasInputAccess {
+      permissionMessage = nil
+      refresh()
     }
   }
 
