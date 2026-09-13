@@ -1,5 +1,5 @@
-import EternalLightsCore
 import Foundation
+import ModelOEternalConfigurationCore
 
 enum Command: Equatable {
   case capabilities
@@ -52,7 +52,7 @@ enum Arguments {
       try requireNoArguments(rest, command: name)
       return .version
     default:
-      throw CLIError.usage("Unknown command '\(name)'. Run 'eternal-lights help'.")
+      throw CLIError.usage("Unknown command '\(name)'. Run 'model-o-eternal-config help'.")
     }
   }
 
@@ -77,7 +77,8 @@ enum Arguments {
       case "--effect":
         guard patch.effect == nil else { throw duplicate(option) }
         guard let effect = LightingEffect(identifier: value) else {
-          throw CLIError.usage("Unknown effect '\(value)'. Run 'eternal-lights effects'.")
+          throw CLIError.usage(
+            "Unknown effect '\(value)'. Run 'model-o-eternal-config effects'.")
         }
         patch.effect = effect
       case "--color":
@@ -90,7 +91,7 @@ enum Arguments {
         guard patch.speed == nil else { throw duplicate(option) }
         patch.speed = try parseLevel(value, option: option, range: 1...3)
       default:
-        throw CLIError.usage("Unknown option '\(option)'. Run 'eternal-lights help'.")
+        throw CLIError.usage("Unknown option '\(option)'. Run 'model-o-eternal-config help'.")
       }
       index += 2
     }
@@ -136,8 +137,8 @@ enum Arguments {
 }
 
 @main
-enum EternalLightsCommand {
-  static let version = "1.0.0"
+enum ModelOEternalConfigurationCommand {
+  static let version = "0.1.0"
 
   static func main() {
     do {
@@ -167,7 +168,7 @@ enum EternalLightsCommand {
       writeJSON([
         "ok": true,
         "result": [
-          "name": "Eternal Lights",
+          "name": "Model O Eternal Configuration",
           "version": version,
           "output": "JSON",
           "device": ["vendorId": "3794", "productId": "a000"],
@@ -278,7 +279,8 @@ enum EternalLightsCommand {
 
   private static func remediation(for error: Error) -> String {
     switch errorCode(for: error) {
-    case "invalid_arguments": return "Run 'eternal-lights help' and correct the request."
+    case "invalid_arguments":
+      return "Run 'model-o-eternal-config help' and correct the request."
     case "device_not_connected": return "Connect a wired Model O Eternal and try again."
     case "input_monitoring_required":
       return
@@ -291,13 +293,13 @@ enum EternalLightsCommand {
     Control the lighting on a wired Glorious Model O Eternal.
 
     Usage:
-      eternal-lights capabilities
-      eternal-lights effects
-      eternal-lights status
-      eternal-lights set [--effect ID] [--color RRGGBB] [--brightness 1-4] [--speed 1-3] [--dry-run]
-      eternal-lights --version
+      model-o-eternal-config capabilities
+      model-o-eternal-config effects
+      model-o-eternal-config status
+      model-o-eternal-config set [--effect ID] [--color RRGGBB] [--brightness 1-4] [--speed 1-3] [--dry-run]
+      model-o-eternal-config --version
 
     Commands return one JSON object. The set command changes only the supplied settings.
-    Use 'eternal-lights effects' to see which settings each effect accepts.
+    Use 'model-o-eternal-config effects' to see which settings each effect accepts.
     """
 }

@@ -1,6 +1,6 @@
 import Testing
 
-@testable import EternalLightsCore
+@testable import ModelOEternalConfigurationCore
 
 struct ModelOEternalConfigurationTests {
   @Test

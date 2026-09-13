@@ -5,25 +5,25 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd "$script_dir/.." && pwd)"
 build_dir="$project_dir/.build/apple/Products/Release"
-app_work_dir="$(mktemp -d /tmp/eternal-lights-app.XXXXXX)"
-app_dir="$app_work_dir/Eternal Lights.app"
-cli_path="$app_work_dir/eternal-lights"
+app_work_dir="$(mktemp -d /tmp/model-o-eternal-config-app.XXXXXX)"
+app_dir="$app_work_dir/Model O Eternal Configuration.app"
+cli_path="$app_work_dir/model-o-eternal-config"
 contents_dir="$app_dir/Contents"
 resources_dir="$contents_dir/Resources"
-icon_work_dir="$(mktemp -d /tmp/eternal-lights-icon.XXXXXX)"
-archive_work_path="$project_dir/.build/EternalLights-macOS-universal.zip"
-archive_path="$project_dir/dist/EternalLights-macOS-universal.zip"
+icon_work_dir="$(mktemp -d /tmp/model-o-eternal-config-icon.XXXXXX)"
+archive_work_path="$project_dir/.build/Model-O-Eternal-Configuration-macOS-universal.zip"
+archive_path="$project_dir/dist/Model-O-Eternal-Configuration-macOS-universal.zip"
 
 trap '/bin/rm -rf "$app_work_dir" "$icon_work_dir"' EXIT
 
 cd "$project_dir"
-swift build -c release --product EternalLights --arch arm64 --arch x86_64
-swift build -c release --product eternal-lights --arch arm64 --arch x86_64
+swift build -c release --product ModelOEternalConfiguration --arch arm64 --arch x86_64
+swift build -c release --product model-o-eternal-config --arch arm64 --arch x86_64
 
 /bin/mkdir -p "$contents_dir/MacOS" "$resources_dir" "$project_dir/dist"
-/usr/bin/install -m 755 "$build_dir/EternalLights" "$contents_dir/MacOS/EternalLights"
-/usr/bin/install -m 755 "$build_dir/eternal-lights" "$cli_path"
-/usr/bin/strip -x "$contents_dir/MacOS/EternalLights" "$cli_path"
+/usr/bin/install -m 755 "$build_dir/ModelOEternalConfiguration" "$contents_dir/MacOS/ModelOEternalConfiguration"
+/usr/bin/install -m 755 "$build_dir/model-o-eternal-config" "$cli_path"
+/usr/bin/strip -x "$contents_dir/MacOS/ModelOEternalConfiguration" "$cli_path"
 /usr/bin/install -m 644 "$project_dir/Support/Info.plist" "$contents_dir/Info.plist"
 /usr/bin/plutil -lint "$contents_dir/Info.plist"
 
@@ -36,7 +36,7 @@ for size in 16 32 128 256 512; do
 done
 /usr/bin/iconutil -c icns "$icon_work_dir/AppIcon.iconset" -o "$resources_dir/AppIcon.icns"
 
-signing_identity="${ETERNAL_LIGHTS_SIGNING_IDENTITY:--}"
+signing_identity="${MODEL_O_ETERNAL_SIGNING_IDENTITY:--}"
 if [[ "$signing_identity" == "-" ]]; then
     /usr/bin/codesign --force --sign - "$cli_path"
     /usr/bin/codesign --force --sign - "$app_dir"
@@ -48,17 +48,17 @@ fi
 /usr/bin/codesign --verify --deep --strict "$app_dir"
 
 /bin/rm -f "$archive_work_path"
-(cd "$app_work_dir" && /usr/bin/zip -q -r -X "$archive_work_path" "Eternal Lights.app" eternal-lights)
+(cd "$app_work_dir" && /usr/bin/zip -q -r -X "$archive_work_path" "Model O Eternal Configuration.app" model-o-eternal-config)
 
-if [[ -n "${ETERNAL_LIGHTS_NOTARY_PROFILE:-}" ]]; then
+if [[ -n "${MODEL_O_ETERNAL_NOTARY_PROFILE:-}" ]]; then
     if [[ "$signing_identity" == "-" ]]; then
         echo "A Developer ID signing identity is required for notarization." >&2
         exit 1
     fi
-    /usr/bin/xcrun notarytool submit "$archive_work_path" --keychain-profile "$ETERNAL_LIGHTS_NOTARY_PROFILE" --wait
+    /usr/bin/xcrun notarytool submit "$archive_work_path" --keychain-profile "$MODEL_O_ETERNAL_NOTARY_PROFILE" --wait
     /usr/bin/xcrun stapler staple "$app_dir"
     /bin/rm -f "$archive_work_path"
-    (cd "$app_work_dir" && /usr/bin/zip -q -r -X "$archive_work_path" "Eternal Lights.app" eternal-lights)
+    (cd "$app_work_dir" && /usr/bin/zip -q -r -X "$archive_work_path" "Model O Eternal Configuration.app" model-o-eternal-config)
 fi
 
 /bin/mv -f "$archive_work_path" "$archive_path"

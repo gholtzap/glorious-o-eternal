@@ -21,7 +21,7 @@ public enum ModelOEternalDeviceError: LocalizedError {
     case .cannotOpenDevice(let code):
       "macOS could not open the mouse control interface (\(Self.hex(code)))."
     case .inputMonitoringRequired:
-      "Allow Eternal Lights in Input Monitoring, then reopen the app."
+      "Allow Model O Eternal Configuration in Input Monitoring, then reopen the app."
     case .commandFailed(let code):
       "The mouse rejected the configuration request (\(Self.hex(code)))."
     case .readFailed(let code):

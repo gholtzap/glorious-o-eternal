@@ -5,17 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>Eternal Lights</string>
+    <string>Model O Eternal Configuration</string>
     <key>CFBundleExecutable</key>
-    <string>EternalLights</string>
+    <string>ModelOEternalConfiguration</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>app.eternallights.macos</string>
+    <string>app.modeloeternal.configuration</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Eternal Lights</string>
+    <string>Model O Eternal Configuration</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -29,7 +29,7 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2026 Eternal Lights contributors</string>
+    <string>Copyright © 2026 Model O Eternal Configuration contributors</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>

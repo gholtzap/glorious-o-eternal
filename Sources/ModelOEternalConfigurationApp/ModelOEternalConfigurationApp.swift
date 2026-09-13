@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct EternalLightsApp: App {
+struct ModelOEternalConfigurationApp: App {
   var body: some Scene {
     WindowGroup {
       ContentView()

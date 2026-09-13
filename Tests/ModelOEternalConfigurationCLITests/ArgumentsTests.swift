@@ -1,6 +1,6 @@
 import Testing
 
-@testable import EternalLightsCLI
+@testable import ModelOEternalConfigurationCLI
 
 struct ArgumentsTests {
   @Test

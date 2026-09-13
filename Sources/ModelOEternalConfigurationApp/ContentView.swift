@@ -1,6 +1,6 @@
 import AppKit
 import CoreGraphics
-import EternalLightsCore
+import ModelOEternalConfigurationCore
 import SwiftUI
 
 struct ContentView: View {
@@ -16,6 +16,8 @@ struct ContentView: View {
   @State private var message = "Connect your Model O Eternal."
   @State private var hasInputAccess = CGPreflightListenEventAccess()
   @State private var permissionMessage: String?
+  @State private var lastAppliedSettings: LightingSettings?
+  @State private var applyTask: Task<Void, Never>?
 
   private let mouse = ModelOEternalDevice()
 
@@ -89,6 +91,8 @@ struct ContentView: View {
         }
       }
       .disabled(!isConnected || isWorking)
+      .onChange(of: settings) { _, _ in scheduleApply() }
+      .onChange(of: selectedColor) { _, _ in scheduleApply() }
 
       HStack {
         Text(message)
@@ -99,12 +103,9 @@ struct ContentView: View {
 
         Button("Refresh", action: refresh)
           .disabled(isWorking)
-
-        Button("Apply", action: apply)
-          .buttonStyle(.borderedProminent)
-          .disabled(!isConnected || isWorking)
       }
     }
+    .onDisappear { applyTask?.cancel() }
   }
 
   private var accessRequest: some View {
@@ -118,7 +119,7 @@ struct ContentView: View {
       .fixedSize(horizontal: false, vertical: true)
 
       Text(
-        "Eternal Lights does not record or process keystrokes. It reads and writes only the Model O Eternal configuration reports."
+        "Model O Eternal Configuration does not record or process keystrokes. It reads and writes only the mouse configuration reports."
       )
       .foregroundStyle(.secondary)
       .fixedSize(horizontal: false, vertical: true)
@@ -146,7 +147,7 @@ struct ContentView: View {
         .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 3) {
-        Text("Eternal Lights")
+        Text("Model O Eternal Configuration")
           .font(.title2.weight(.semibold))
         Text("Lighting control for Glorious Model O Eternal")
           .foregroundStyle(.secondary)
@@ -160,6 +161,7 @@ struct ContentView: View {
 
     do {
       settings = try mouse.readSettings()
+      lastAppliedSettings = settings
       selectedColor = Color(
         red: Double(settings.color.red) / 255,
         green: Double(settings.color.green) / 255,
@@ -177,7 +179,8 @@ struct ContentView: View {
     _ = CGRequestListenEventAccess()
     checkAccess()
     if !hasInputAccess {
-      permissionMessage = "Allow access in System Settings, then reopen Eternal Lights."
+      permissionMessage =
+        "Allow access in System Settings, then reopen Model O Eternal Configuration."
     }
   }
 
@@ -200,17 +203,29 @@ struct ContentView: View {
       green: UInt8(clamping: Int((color.greenComponent * 255).rounded())),
       blue: UInt8(clamping: Int((color.blueComponent * 255).rounded()))
     )
+    guard lastAppliedSettings?.hasSameEffectiveValues(as: settings) != true else { return }
 
     isWorking = true
     defer { isWorking = false }
 
     do {
       try mouse.apply(settings)
+      lastAppliedSettings = settings
       isConnected = true
       message = "Lighting settings saved to the mouse."
     } catch {
       message = error.localizedDescription
       isConnected = mouse.isConnected()
+    }
+  }
+
+  private func scheduleApply() {
+    guard isConnected else { return }
+    applyTask?.cancel()
+    applyTask = Task { @MainActor in
+      try? await Task.sleep(for: .milliseconds(250))
+      guard !Task.isCancelled else { return }
+      apply()
     }
   }
 }

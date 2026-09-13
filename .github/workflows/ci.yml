@@ -18,12 +18,12 @@ jobs:
         run: swift test
       - name: Check the agent interface
         run: |
-          .build/debug/eternal-lights capabilities | python3 -m json.tool >/dev/null
-          .build/debug/eternal-lights effects | python3 -m json.tool >/dev/null
+          .build/debug/model-o-eternal-config capabilities | python3 -m json.tool >/dev/null
+          .build/debug/model-o-eternal-config effects | python3 -m json.tool >/dev/null
       - name: Package an ad hoc signed test build
         run: ./scripts/package.sh
       - uses: actions/upload-artifact@v6
         with:
-          name: EternalLights-macOS-universal
-          path: dist/EternalLights-macOS-universal.zip
+          name: Model-O-Eternal-Configuration-macOS-universal
+          path: dist/Model-O-Eternal-Configuration-macOS-universal.zip
           if-no-files-found: error

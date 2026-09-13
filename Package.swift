@@ -3,32 +3,33 @@
 import PackageDescription
 
 let package = Package(
-  name: "EternalLights",
+  name: "ModelOEternalConfiguration",
   platforms: [.macOS(.v15)],
   products: [
-    .executable(name: "EternalLights", targets: ["EternalLightsApp"]),
-    .executable(name: "eternal-lights", targets: ["EternalLightsCLI"]),
+    .executable(
+      name: "ModelOEternalConfiguration", targets: ["ModelOEternalConfigurationApp"]),
+    .executable(name: "model-o-eternal-config", targets: ["ModelOEternalConfigurationCLI"]),
   ],
   targets: [
     .target(
-      name: "EternalLightsCore",
+      name: "ModelOEternalConfigurationCore",
       linkerSettings: [.linkedFramework("IOKit")]
     ),
     .executableTarget(
-      name: "EternalLightsApp",
-      dependencies: ["EternalLightsCore"]
+      name: "ModelOEternalConfigurationApp",
+      dependencies: ["ModelOEternalConfigurationCore"]
     ),
     .executableTarget(
-      name: "EternalLightsCLI",
-      dependencies: ["EternalLightsCore"]
+      name: "ModelOEternalConfigurationCLI",
+      dependencies: ["ModelOEternalConfigurationCore"]
     ),
     .testTarget(
-      name: "EternalLightsCoreTests",
-      dependencies: ["EternalLightsCore"]
+      name: "ModelOEternalConfigurationCoreTests",
+      dependencies: ["ModelOEternalConfigurationCore"]
     ),
     .testTarget(
-      name: "EternalLightsCLITests",
-      dependencies: ["EternalLightsCLI"]
+      name: "ModelOEternalConfigurationCLITests",
+      dependencies: ["ModelOEternalConfigurationCLI"]
     ),
   ]
 )

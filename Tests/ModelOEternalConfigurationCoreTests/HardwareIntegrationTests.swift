@@ -1,10 +1,11 @@
 import Foundation
 import Testing
 
-@testable import EternalLightsCore
+@testable import ModelOEternalConfigurationCore
 
 struct HardwareIntegrationTests {
-  @Test(.enabled(if: ProcessInfo.processInfo.environment["ETERNAL_LIGHTS_HARDWARE_TEST"] == "1"))
+  @Test(
+    .enabled(if: ProcessInfo.processInfo.environment["MODEL_O_ETERNAL_HARDWARE_TEST"] == "1"))
   func readsConnectedModelOEternalWithoutWriting() throws {
     let raw = try ModelOEternalDevice().readRawConfigurationSnapshot()
 
@@ -15,7 +16,8 @@ struct HardwareIntegrationTests {
   }
 
   @Test(
-    .enabled(if: ProcessInfo.processInfo.environment["ETERNAL_LIGHTS_HARDWARE_WRITE_TEST"] == "1"))
+    .enabled(
+      if: ProcessInfo.processInfo.environment["MODEL_O_ETERNAL_HARDWARE_WRITE_TEST"] == "1"))
   func writesVerifiesAndRestoresEveryLightingEffect() throws {
     let mouse = ModelOEternalDevice()
     let original = try mouse.readSettings()
