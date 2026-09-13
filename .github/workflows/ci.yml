@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-package:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 26
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app
+      - name: Test
+        run: swift test
+      - name: Check the agent interface
+        run: |
+          .build/debug/eternal-lights capabilities | python3 -m json.tool >/dev/null
+          .build/debug/eternal-lights effects | python3 -m json.tool >/dev/null
+      - name: Package an ad hoc signed test build
+        run: ./scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EternalLights-macOS-universal
+          path: dist/EternalLights-macOS-universal.zip
+          if-no-files-found: error
