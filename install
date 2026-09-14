@@ -1,0 +1,63 @@
+#!/bin/bash
+
+set -euo pipefail
+
+project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+identity="${MODEL_O_ETERNAL_SIGNING_IDENTITY:-}"
+if [[ -z "$identity" ]]; then
+    identity="$(/usr/bin/security find-identity -v -p codesigning | /usr/bin/sed -n 's/.*"\(Apple Development:.*\)"/\1/p' | /usr/bin/head -n 1)"
+fi
+if [[ -z "$identity" ]]; then
+    echo "No Apple Development signing identity was found." >&2
+    echo "Sign in to Xcode with a free Apple Account, create an Apple Development certificate, and run ./install again." >&2
+    exit 1
+fi
+
+if [[ -w /Applications ]]; then
+    install_dir="/Applications"
+else
+    install_dir="$HOME/Applications"
+    /bin/mkdir -p "$install_dir"
+fi
+target_app="$install_dir/Model O Eternal Configuration.app"
+work_dir="$(/usr/bin/mktemp -d "$install_dir/.model-o-eternal-install.XXXXXX")"
+backup_app="$work_dir/previous.app"
+restore_previous_app() {
+    if [[ -d "$backup_app" && ! -d "$target_app" ]]; then
+        /bin/mv "$backup_app" "$target_app"
+    fi
+    /bin/rm -rf "$work_dir"
+}
+trap restore_previous_app EXIT
+
+MODEL_O_ETERNAL_SIGNING_IDENTITY="$identity" "$project_dir/scripts/package.sh"
+/usr/bin/ditto -x -k "$project_dir/dist/Model-O-Eternal-Configuration-macOS-universal.zip" "$work_dir/package"
+staged_app="$work_dir/package/Model O Eternal Configuration.app"
+/usr/bin/codesign --verify --deep --strict "$staged_app"
+team_id="$(/usr/bin/codesign -dv --verbose=4 "$staged_app" 2>&1 | /usr/bin/sed -n 's/^TeamIdentifier=//p')"
+if [[ -z "$team_id" || "$team_id" == "not set" ]]; then
+    echo "The packaged app does not have a stable signing identity." >&2
+    exit 1
+fi
+
+reset_input_access=false
+if [[ -d "$target_app" ]]; then
+    existing_team_id="$(/usr/bin/codesign -dv --verbose=4 "$target_app" 2>&1 | /usr/bin/sed -n 's/^TeamIdentifier=//p')"
+    if [[ "$existing_team_id" != "$team_id" ]]; then
+        reset_input_access=true
+    fi
+fi
+
+/usr/bin/osascript -e 'tell application id "app.modeloeternal.configuration" to quit' 2>/dev/null || true
+/bin/sleep 1
+if [[ "$reset_input_access" == true ]]; then
+    /usr/bin/tccutil reset ListenEvent app.modeloeternal.configuration >/dev/null
+fi
+if [[ -d "$target_app" ]]; then
+    /bin/mv "$target_app" "$backup_app"
+fi
+/bin/mv "$staged_app" "$target_app"
+/usr/bin/open "$target_app"
+
+echo "Installed $target_app"
+echo "If macOS asks for Input Monitoring, enable Model O Eternal Configuration, then select Quit & Reopen."

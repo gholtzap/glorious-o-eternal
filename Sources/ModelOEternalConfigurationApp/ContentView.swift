@@ -1,5 +1,4 @@
 import AppKit
-import CoreGraphics
 import ModelOEternalConfigurationCore
 import SwiftUI
 
@@ -278,7 +277,7 @@ struct ContentView: View {
   }
 
   private func requestAccess() {
-    _ = CGRequestListenEventAccess()
+    _ = mouse.requestInputMonitoringAccess()
     refresh()
     guard !hasInputAccess else { return }
     permissionMessage =

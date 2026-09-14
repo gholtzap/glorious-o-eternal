@@ -57,6 +57,10 @@ public struct ModelOEternalDevice {
 
   public init() {}
 
+  public func requestInputMonitoringAccess() -> Bool {
+    IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+  }
+
   public func readSettings() throws -> LightingSettings {
     try readConfigurationSnapshot().settings
   }
@@ -308,6 +312,9 @@ public struct ModelOEternalDevice {
   }
 
   private func withControlDevice<T>(_ operation: (IOHIDDevice) throws -> T) throws -> T {
+    guard IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted else {
+      throw ModelOEternalDeviceError.inputMonitoringRequired
+    }
     let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
     let matching: [String: Any] = [
       kIOHIDVendorIDKey as String: Self.vendorID,
