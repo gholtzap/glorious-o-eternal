@@ -9,11 +9,11 @@ permissions:
 
 jobs:
   test-and-package:
-    runs-on: macos-15
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && 'mini-macos' || 'macos-15' }}
     steps:
       - uses: actions/checkout@v7
-      - name: Select Xcode 26
-        run: sudo xcode-select --switch /Applications/Xcode_26.0.app
+      - name: Check Swift tools
+        run: xcrun swift --version
       - name: Test
         run: swift test
       - name: Check the agent interface
