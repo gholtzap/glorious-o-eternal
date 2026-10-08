@@ -4,7 +4,6 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd "$script_dir/.." && pwd)"
-build_dir="$project_dir/.build/apple/Products/Release"
 app_work_dir="$(mktemp -d /tmp/model-o-eternal-config-app.XXXXXX)"
 app_dir="$app_work_dir/Model O Eternal Configuration.app"
 cli_path="$app_work_dir/model-o-eternal-config"
@@ -17,6 +16,7 @@ archive_path="$project_dir/dist/Model-O-Eternal-Configuration-macOS-universal.zi
 trap '/bin/rm -rf "$app_work_dir" "$icon_work_dir"' EXIT
 
 cd "$project_dir"
+build_dir="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
 swift build -c release --product ModelOEternalConfiguration --arch arm64 --arch x86_64
 swift build -c release --product model-o-eternal-config --arch arm64 --arch x86_64
 
